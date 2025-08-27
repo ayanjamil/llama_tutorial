@@ -9,6 +9,12 @@ from llama_index.core.workflow import (
     HumanResponseEvent,
 )
 
+# wait_for_event is used to wait for a HumanResponseEvent.
+# The waiter_event is the event that is written to the event stream, to let the caller know that we're waiting for a response.
+# waiter_id is a unique identifier for this specific wait call. It helps ensure that we only send one waiter_event for each waiter_id.
+# The requirements argument is used to specify that we want to wait for a HumanResponseEvent with a specific user_name.
+
+
 llm = OpenAI(model="gpt-4o-mini")
 
 # a tool that performs a dangerous task
