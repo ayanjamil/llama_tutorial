@@ -1,23 +1,37 @@
-from dotenv import load_dotenv
-load_dotenv()
+"""
+Clean Web Search Agent with Streaming Output
+- Uses Tavily for web search
+- Uses OpenAI as the LLM
+- Streams readable responses to the terminal
+"""
 
+import os
+import asyncio
+from dotenv import load_dotenv
+
+# Import LlamaIndex modules
 from llama_index.llms.openai import OpenAI
 from llama_index.core.agent.workflow import AgentWorkflow
-from llama_index.core.workflow import Context
 from llama_index.tools.tavily_research import TavilyToolSpec
-import os
+
+# Event classes for streaming
 from llama_index.core.agent.workflow import (
     AgentInput,
     AgentOutput,
-    ToolCall,
     ToolCallResult,
     AgentStream,
 )
 
+# Load environment variables (expects TAVILY_API_KEY in .env)
+load_dotenv()
+
+# Setup OpenAI LLM
 llm = OpenAI(model="gpt-4o-mini")
 
-tavily_tool = TavilyToolSpec( api_key=os.getenv("TAVILY_API_KEY") )
+# Setup Tavily web search tool
+tavily_tool = TavilyToolSpec(api_key=os.getenv("TAVILY_API_KEY"))
 
+# Create an agent workflow with the Tavily tool
 workflow = AgentWorkflow.from_tools_or_functions(
     tavily_tool.to_tool_list(),
     llm=llm,
@@ -25,27 +39,28 @@ workflow = AgentWorkflow.from_tools_or_functions(
 )
 
 async def main():
+    print("Client: What's the weather like in San Francisco?")
+
     handler = workflow.run(user_msg="What's the weather like in San Francisco?")
 
-    # handle streaming output
+    # Collect agent's answer as it streams
+    agent_response = ""
+
     async for event in handler.stream_events():
         if isinstance(event, AgentStream):
+            # Stream only the assistant text response
+            agent_response += event.delta
             print(event.delta, end="", flush=True)
-        elif isinstance(event, AgentInput):
-            print("Agent input: ", event.input)  # the current input messages
-            print("Agent name:", event.current_agent_name)  # the current agent name
-        elif isinstance(event, AgentOutput):
-            print("Agent output: ", event.response)  # the current full response
-            print("Tool calls made: ", event.tool_calls)  # the selected tool calls, if any
-            print("Raw LLM response: ", event.raw)  # the raw llm api response
-        elif isinstance(event, ToolCallResult):
-            print("Tool called: ", event.tool_name)  # the tool name
-            print("Arguments to the tool: ", event.tool_kwargs)  # the tool kwargs
-            print("Tool output: ", event.tool_output)  # the tool output            
 
-    # print final output
-    print(str(await handler))
+        elif isinstance(event, ToolCallResult):
+            # Summarize tool calls instead of dumping raw data
+            print(f"\n[Tool Used: {event.tool_name}]")
+            print(f"Query: {event.tool_kwargs}")
+            print(f"Result snippet: {str(event.tool_output)[:200]}...")  # show first 200 chars
+
+    # Print final clean output
+    final_response = await handler
+    print("\n\nAgent (final):", str(final_response))
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
